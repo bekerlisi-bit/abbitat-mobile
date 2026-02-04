@@ -1,64 +1,79 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/accomplishment.dart';
+import 'api_service.dart';
 
 class AccomplishmentService {
   final _supabase = Supabase.instance.client;
+  final _api = ApiService();
 
   Future<List<Accomplishment>> getTodaysAccomplishments() async {
     final today = DateTime.now().toIso8601String().split('T')[0];
-    final userId = _supabase.auth.currentUser?.id;
     
-    if (userId == null) return [];
+    try {
+      final data = await _api.getAccomplishments(date: today);
+      return data.map((json) => Accomplishment.fromJson(_transformApiResponse(json))).toList();
+    } catch (e) {
+      // Fallback to direct Supabase if API fails
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
 
-    final response = await _supabase
-        .from('accomplishments')
-        .select()
-        .eq('user_id', userId)
-        .eq('logged_date', today)
-        .order('created_at', ascending: false);
+      final response = await _supabase
+          .from('accomplishments')
+          .select()
+          .eq('user_id', userId)
+          .eq('logged_date', today)
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((json) => Accomplishment.fromJson(json))
-        .toList();
+      return (response as List)
+          .map((json) => Accomplishment.fromJson(json))
+          .toList();
+    }
   }
 
   Future<List<Accomplishment>> getAllAccomplishments({int limit = 100}) async {
-    final userId = _supabase.auth.currentUser?.id;
-    
-    if (userId == null) return [];
+    try {
+      final data = await _api.getAccomplishments(limit: limit);
+      return data.map((json) => Accomplishment.fromJson(_transformApiResponse(json))).toList();
+    } catch (e) {
+      // Fallback to direct Supabase
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
 
-    final response = await _supabase
-        .from('accomplishments')
-        .select()
-        .eq('user_id', userId)
-        .order('logged_date', ascending: false)
-        .limit(limit);
+      final response = await _supabase
+          .from('accomplishments')
+          .select()
+          .eq('user_id', userId)
+          .order('logged_date', ascending: false)
+          .limit(limit);
 
-    return (response as List)
-        .map((json) => Accomplishment.fromJson(json))
-        .toList();
+      return (response as List)
+          .map((json) => Accomplishment.fromJson(json))
+          .toList();
+    }
   }
 
   Future<Map<String, dynamic>> createAccomplishment(String text) async {
-    final userId = _supabase.auth.currentUser?.id;
-    final today = DateTime.now().toIso8601String().split('T')[0];
-    
-    if (userId == null) throw Exception('Not authenticated');
+    // Use API service for AI scoring
+    return await _api.createAccomplishment(text);
+  }
 
-    // For now, create without AI scoring (we'll call the web API for scoring)
-    // In production, you'd want to call a Supabase Edge Function for AI scoring
-    final response = await _supabase
-        .from('accomplishments')
-        .insert({
-          'user_id': userId,
-          'raw_text': text,
-          'score': 50, // Default score, should be replaced by AI
-          'logged_date': today,
-        })
-        .select()
-        .single();
-
-    return response;
+  // Transform camelCase API response to snake_case for model
+  Map<String, dynamic> _transformApiResponse(Map<String, dynamic> json) {
+    return {
+      'id': json['id'],
+      'user_id': json['userId'],
+      'raw_text': json['rawText'],
+      'normalized_text': json['normalizedText'],
+      'category': json['category'],
+      'score': json['score'],
+      'score_reasoning': json['scoreReasoning'],
+      'scoring_factors': json['scoringFactors'],
+      'estimated_time_minutes': json['estimatedTimeMinutes'],
+      'flagged': json['flagged'],
+      'flag_reason': json['flagReason'],
+      'logged_date': json['loggedDate'],
+      'created_at': json['createdAt'],
+    };
   }
 
   Future<Map<String, int>> getWeeklyStats() async {

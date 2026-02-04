@@ -62,13 +62,46 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await _accomplishmentService.createAccomplishment(text);
+      final result = await _accomplishmentService.createAccomplishment(text);
       _accomplishmentController.clear();
+      
+      // Show score feedback
+      final scoring = result['scoring'];
+      if (scoring != null && mounted) {
+        final score = scoring['score'] ?? 0;
+        final reasoning = scoring['reasoning'] ?? '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '+$score points!',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                if (reasoning.isNotEmpty)
+                  Text(
+                    reasoning,
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+            backgroundColor: _getScoreColor(score),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      
       await _loadData();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     }
 
     setState(() => _isSubmitting = false);
